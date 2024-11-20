@@ -427,10 +427,12 @@ class ScoponeGame:
 
             if v>=2: print(f'Card {card} has index {indx}')
             
+            actions_array[indx] = 1
+
             isin, comb = self.card_in_table(card=card)
             if isin:
                 #actions_array[indx] = {'type': 'capture', 'card': str(card), 'with': [str(c) for c in comb], 'leaving': len(self.table)-len(comb)}
-                actions_array[indx] = 1
+                actions_array[indx] = 2
 
 
         if v >= 2: print(f'[DEBUG] Player {player.__hash__()} actions: {actions_array}')
@@ -590,6 +592,8 @@ class ScoponeGame:
                     reward += 1 + c.rank*0.5
                 else:
                     reward += 0.25 + c.rank*0.1
+        else:
+            reward -= 1
 
 
         return reward

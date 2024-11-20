@@ -37,6 +37,7 @@ class ScopaEnv(gym.Env):
     
     def action_valid(self, action):
         actions = self.game.get_player_actions(self.player)
+        print(f"Invalid action for action {action} and actions {actions} and hand {self.player.hand}")
         return actions[action]==1
 
 
