@@ -595,19 +595,17 @@ class ScoponeGame:
         return reward
     
     def get_action(self, player: Player, action, v=0):
-        selected_action = np.argmax(action)
-        for card in player.hand:
-            if self.map_card_index(card) == selected_action:
-                return card
-
+        
+        for i, card in enumerate(player.hand):
+            if i == action:
+                return card 
 
 
     def gym_step(self, player: Player, action, v=-1):
-        if sum(action) != 1:
-            raise ValueError(f'Invalid action must be shape (1,40). Recieved {action}')
-
+        print('Action:', action)
         card = self.get_action(player, action, v=v)
-
+        if card is None:
+            raise ValueError('Card is None. Original action: ' + str(action))
         reward = self.calculate_reward(player, card)
 
         self.play_card(card, player, v=v)

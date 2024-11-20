@@ -16,8 +16,8 @@ class ScopaEnv(gym.Env):
         # 1 player 40 possible cards + 40 possible captures + 40 possible cards on table
         self.observation_space = spaces.MultiBinary((3,40))
         
-        # 50 possible actions: 40 cards
-        self.action_space = spaces.MultiBinary(40)
+        # index of the card
+        self.action_space = spaces.Discrete(40)
 
         self.state = self.game.get_player_state(self.player)
 
@@ -27,9 +27,17 @@ class ScopaEnv(gym.Env):
     
 
     def step(self, action):
+        if not self.action_valid(action):
+            return self.state, -1, False, {}
         state, reward, done, info = self.game.gym_step(player=self.player, action=action)
+        next_state = self.game.get_player_state(self.player)
+        next_state = next_state.flatten()  # Flatten the next state
 
-        return state, reward, done, info
+        return next_state, reward, done, info
+    
+    def action_valid(self, action):
+        actions = self.game.get_player_actions(self.player)
+        return actions[action]==1
 
 
     
@@ -38,6 +46,7 @@ class ScopaEnv(gym.Env):
         self.game.deal_initial_hands()
         self.player = self.game.players[self.player_number]
         self.state = self.game.get_player_state(self.player)
+        self.state = self.state.flatten()  # Flatten the state to a 1D array
 
         return self.state
     
