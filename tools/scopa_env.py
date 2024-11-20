@@ -1,7 +1,7 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from scopone_scientifico_sim import *
+from tools.scopone_scientifico_sim import *
 from tqdm import tqdm
 
 class ScopaEnv(gym.Env):
