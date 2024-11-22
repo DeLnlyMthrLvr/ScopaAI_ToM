@@ -599,14 +599,19 @@ class ScoponeGame:
         return reward
     
     def get_action(self, player: Player, action, v=0):
+
+        deck = Deck().deal(40)
         
-        for i, card in enumerate(player.hand):
-            if i == action:
-                return card 
+        if deck[action] is None:
+            raise ValueError('Card is None. Original action: ' + str(action))
+        else:
+            return deck[action]
+            
+        
 
 
     def gym_step(self, player: Player, action, v=-1):
-        print('Action:', action)
+        #print('Action:', action)
         card = self.get_action(player, action, v=v)
         if card is None:
             raise ValueError('Card is None. Original action: ' + str(action))

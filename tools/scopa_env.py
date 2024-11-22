@@ -17,7 +17,7 @@ class ScopaEnv(gym.Env):
         self.observation_space = spaces.MultiBinary((3,40))
         
         # index of the card
-        self.action_space = spaces.Discrete(40)
+        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(1,40), dtype=np.float32)
 
         self.state = self.game.get_player_state(self.player)
 
@@ -31,14 +31,15 @@ class ScopaEnv(gym.Env):
             return self.state, -1, False, {}
         state, reward, done, info = self.game.gym_step(player=self.player, action=action)
         next_state = self.game.get_player_state(self.player)
-        next_state = next_state.flatten()  # Flatten the next state
+        next_state = next_state.flatten()  # Flastten the next state
 
         return next_state, reward, done, info
     
     def action_valid(self, action):
         actions = self.game.get_player_actions(self.player)
-        print(f"Invalid action for action {action} and actions {actions} and hand {self.player.hand}")
-        return actions[action]==1
+        #print(f"Invalid action for action {action} {actions[action]} and actions {actions} and {actions[action]}")
+        deck = Deck().deal(40)
+        return actions[action] == 1 and deck[action] in self.player.hand
 
 
     
