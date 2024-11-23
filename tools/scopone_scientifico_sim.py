@@ -618,7 +618,7 @@ class ScoponeGame:
         reward = self.calculate_reward(player, card)
 
         self.play_card(card, player, v=v)
-
+        print(f'[RL] POINTS: {self.step_points[0]}|{self.step_points[1]}')
         done = False
         if sum([len(p.hand) == 0 for p in self.players]) == 4:
             self.last_capture.capture(self.table, _with=None)

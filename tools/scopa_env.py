@@ -27,11 +27,11 @@ class ScopaEnv(gym.Env):
     
 
     def step(self, action):
+        print(f"Action {action}")
         if not self.action_valid(action):
             return self.state, -1, False, {}
         state, reward, done, info = self.game.gym_step(player=self.player, action=action)
-        next_state = self.game.get_player_state(self.player)
-        next_state = next_state.flatten()  # Flastten the next state
+        next_state = state.flatten()  # Flastten the next state
 
         return next_state, reward, done, info
     
@@ -39,7 +39,8 @@ class ScopaEnv(gym.Env):
         actions = self.game.get_player_actions(self.player)
         #print(f"Invalid action for action {action} {actions[action]} and actions {actions} and {actions[action]}")
         deck = Deck().deal(40)
-        return actions[action] == 1 and deck[action] in self.player.hand
+        
+        return actions[action] == 1 and str(deck[action]) in [str(card) for card in self.player.hand]
 
 
     
@@ -60,3 +61,4 @@ if __name__ == "__main__":
     env = ScopaEnv()
     print(env.action_space)
     print(env.state)
+    print(env.action_valid(np.argmax(env.action_space.sample())))
