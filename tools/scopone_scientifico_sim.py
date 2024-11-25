@@ -390,6 +390,7 @@ class ScoponeGame:
         self.table = []
         self.last_capture = None
         self.step_points = [0, 0]
+        self.match_points = [0, 0]
         self.game_tick = 0
         self.match_tick = 0
 
@@ -592,7 +593,7 @@ class ScoponeGame:
             raise ValueError('Card is None. Original action: ' + str(action))
         reward = self.calculate_reward(player, card, v=v)
 
-        print(f'[RL] Action: {action} by player {player.__hash__()} yields reward {reward}')
+        if v == -1: print(f'[RL] Action: {action} by player {player.__hash__()} yields reward {reward}')
 
         self.play_card(card, player, v=v)
 

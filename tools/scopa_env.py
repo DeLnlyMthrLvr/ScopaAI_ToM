@@ -45,7 +45,7 @@ class ScopaEnv(gym.Env):
             eval = self.game.evaluate_round(self.game.players, v=v)
             self.game.match_points[0] += eval[0]
             self.game.match_points[1] += eval[1]
-            print(f'[RL] Game is over! {self.game.step_points[0]}|{self.game.step_points[1]} and {self.game.match_points[0]}|{self.game.match_points[1]}')
+            if v == -1: print(f'[RL] Game is over! {self.game.step_points[0]}|{self.game.step_points[1]} and {self.game.match_points[0]}|{self.game.match_points[1]}')
         
         return self.game.get_player_state(player), reward, done, info
     
