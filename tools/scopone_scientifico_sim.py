@@ -97,7 +97,7 @@ class ScoponeGame:
         self.deck = Deck()
         self.players = [Player(i) for i in [1,2,1,2]]
         self.table = []
-        self.last_capture = None
+        self.last_capture = self.players[0]
         self.step_points = [0, 0]
         self.match_points = [0, 0]
         self.game_tick = 0
@@ -208,16 +208,11 @@ class ScoponeGame:
         side1_points = 0
         side2_points = 0
 
-        self.balance_captures()
+        
 
-        side1 = []
-        side2 = []
+        side1, side2 = self.balance_captures()
+        
         for player in players:
-            for card in player.captures:
-                if player.side == 1:
-                    side1.append(card)
-                elif player.side == 2: 
-                    side2.append(card)
             if player.scopas > 0:
                 if player.side == 1:
                     side1_points += player.scopas
@@ -225,7 +220,7 @@ class ScoponeGame:
                     side2_points += player.scopas
 
         if len(side1) + len(side2) != 40:
-            raise ValueError("Not all cards have been captured.")
+            raise ValueError(f"Not all cards have been captured. Side 1 has {len(side1)} and Side 2 has {len(side2)}")
 
         # Key evaulation
 
@@ -317,26 +312,9 @@ class ScoponeGame:
         side2_captures = []
         for player in self.players:
             if player.side == 1:
-                side1_captures.extend(player.captures)
-                player.captures = []
+                side1_captures += player.captures
             elif player.side == 2:
-                side2_captures.extend(player.captures)
-                player.captures = []
-
-        p1, p2, p3, p4 = self.players
-
-        if p1.side != p2.side & p1.side == 1:
-            p1.captures = side1_captures
-            p2.captures = side2_captures
-        elif p1.side != p2.side & p1.side == 2:
-            p1.captures = side2_captures
-            p2.captures = side1_captures
-        elif p1.side == p2.side & p1.side == 1:
-            p1.captures = side1_captures
-            p3.captures = side2_captures
-        elif p1.side == p2.side & p1.side == 2:
-            p1.captures = side2_captures
-            p3.captures = side1_captures
+                side2_captures  += player.captures 
         
         return side1_captures, side2_captures
 
@@ -565,7 +543,7 @@ class ScoponeGame:
 
         return [self.game_tick, self.match_tick,self.step_points[0], self.step_points[1] , deltapoints, cardsplayed, cardsontable] + hand_eval + table_eval
     
-    def calculate_reward(self, player: Player, card: Card,):
+    def calculate_reward(self, player: Player, card: Card,v=0):
         isin, comb = self.card_in_table(card=card)
 
         if comb is None:
@@ -573,61 +551,61 @@ class ScoponeGame:
         
 
         reward = 0
-        if isin:
-            #scopa
-            if len(self.table) - len(comb) == 0:
+    
+        #scopa
+        if len(self.table) - len(comb) == 0:
+            reward += 10
+        elif len(self.table) - len(comb) == 1:
+            reward -= 5
+        #settebello
+        
+        comb.append(card)
+
+        for c in comb:
+            if c.rank == 7 and c.suit == 'bello':
                 reward += 10
-            elif len(self.table) - len(comb) == 1:
-                reward -= 5
-            #settebello
-            
-            comb.append(card)
+        #cards, ori and napola
+        for c in comb:
+            if c.suit == 'bello':
+                reward += 1 + c.rank*0.5
+            else:
+                reward += 0.25 + c.rank*0.1
+        
 
-            for c in comb:
-                if c.rank == 7 and c.suit == 'bello':
-                    reward += 10
-            #cards, ori and napola
-            for c in comb:
-                if c.suit == 'bello':
-                    reward += 1 + c.rank*0.5
-                else:
-                    reward += 0.25 + c.rank*0.1
+        if reward >= 1:
+            reward = 1
         else:
-            reward -= 1
+            reward = -1
 
-
-        return reward
+        return reward   
     
     def get_action(self, player: Player, action, v=0):
         
-        for i, card in enumerate(player.hand):
+        for i, card in zip([self.map_card_index(card) for card in player.hand], player.hand):
             if i == action:
                 return card 
 
 
     def gym_step(self, player: Player, action, v=-1):
-        print('Action:', action)
         card = self.get_action(player, action, v=v)
         if card is None:
             raise ValueError('Card is None. Original action: ' + str(action))
-        reward = self.calculate_reward(player, card)
+        reward = self.calculate_reward(player, card, v=v)
+
+        print(f'[RL] Action: {action} by player {player.__hash__()} yields reward {reward}')
 
         self.play_card(card, player, v=v)
 
-        done = False
-        if sum([len(p.hand) == 0 for p in self.players]) == 4:
-            self.last_capture.capture(self.table, _with=None)
-            done = True
-            eval = self.evaluate_round(self.players, v=v)
-            self.match_points[0] += eval[0]
-            self.match_points[1] += eval[1]
-            if v == -1: print(f'[RL] Game is over! {self.step_points[0]}|{self.step_points[1]} and {self.match_points[0]}|{self.match_points[1]}')
+        return self.get_player_state(player, v=v), reward, False, {}
 
+    def random_step(self, player: Player, action, v=-1):
+        possible = self.get_player_actions(player, v=v)
 
+        card = self.get_action(player, np.argmax(possible), v=v)
+    
+        self.play_card(card, player, v=v)
 
-        return self.get_player_state(player, v=v), reward, done, {}
-
-
+        return self.get_player_state(player, v=v)
 
 
     
