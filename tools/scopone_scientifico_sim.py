@@ -384,13 +384,13 @@ class ScoponeGame:
         else:
             return 2
         
-    def reset(self):
-        self.deck = Deck()
-        self.players = [Player(i) for i in [1,2,1,2]]
+    def reset(self, soft=False):
+        self.deck.reset()
+        #self.players = [Player(i) for i in [1,2,1,2]]
         self.table = []
         self.last_capture = None
         self.step_points = [0, 0]
-        self.match_points = [0, 0]
+        if not soft: self.match_points = [0, 0]
         self.game_tick = 0
         self.match_tick = 0
 
@@ -553,30 +553,26 @@ class ScoponeGame:
 
         reward = 0
     
-        #scopa
-        if len(self.table) - len(comb) == 0:
-            reward += 10
-        elif len(self.table) - len(comb) == 1:
-            reward -= 5
-        #settebello
-        
-        comb.append(card)
-
-        for c in comb:
-            if c.rank == 7 and c.suit == 'bello':
+        if isin:
+            #scopa
+            if len(self.table) - len(comb) == 0:
                 reward += 10
-        #cards, ori and napola
-        for c in comb:
-            if c.suit == 'bello':
-                reward += 1 + c.rank*0.5
-            else:
-                reward += 0.25 + c.rank*0.1
-        
+            elif len(self.table) - len(comb) == 1:
+                reward -= 5
+            #settebello
+            
+            comb.append(card)
 
-        if reward >= 1:
-            reward = 1
-        else:
-            reward = -1
+            for c in comb:
+                if c.rank == 7 and c.suit == 'bello':
+                    reward += 10
+            #cards, ori and napola
+            for c in comb:
+                if c.suit == 'bello':
+                    reward += 1 + c.rank*0.5
+                else:
+                    reward += 0.25 + c.rank*0.1
+        
 
         return reward   
     
@@ -601,8 +597,14 @@ class ScoponeGame:
 
     def random_step(self, player: Player, action, v=-1):
         possible = self.get_player_actions(player, v=v)
-
-        card = self.get_action(player, np.argmax(possible), v=v)
+        chosen_index = np.argmax(possible)
+        for i in range(4):
+            rand = random.choice(possible)
+            if rand == 1 or rand == 2:
+                chosen_index = possible.index(rand)
+                break
+        
+        card = self.get_action(player, chosen_index, v=v)
     
         self.play_card(card, player, v=v)
 
