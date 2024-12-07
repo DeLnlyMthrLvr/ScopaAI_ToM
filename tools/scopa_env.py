@@ -78,7 +78,7 @@ class ScopaEnv(gym.Env):
             return False
         actions = self.game.get_player_actions(player)
         if v ==-1: print(f"[ACTION VALIDATOR] Action for action {action} and actions {actions} and hand {player.hand}")
-        return actions[action]>=1
+        return actions[action]>=0
 
     def get_player(self, intex):
         if intex < 0 or intex > 3:

@@ -145,7 +145,7 @@ class ScoponeGame:
                 return True, [c]
         return False, []
 
-    def __describe_status(self) -> str:
+    def describe_status(self) -> str:
         out = '#' * 10 + ' Game Status ' + '#' * 10 + '\n'
         out += 'Table:\n'
         for card in self.table:
@@ -398,7 +398,7 @@ class ScoponeGame:
     
     def initialise_actions(self, player: Player, v = 0):
 
-        actions_array = [0] * 40
+        actions_array = [-1] * 40
 
         for card in player.hand:
 
@@ -406,12 +406,12 @@ class ScoponeGame:
 
             if v>=2: print(f'Card {card} has index {indx}')
             
-            actions_array[indx] = 1
+            actions_array[indx] = indx
 
             isin, comb = self.card_in_table(card=card)
             if isin:
                 #actions_array[indx] = {'type': 'capture', 'card': str(card), 'with': [str(c) for c in comb], 'leaving': len(self.table)-len(comb)}
-                actions_array[indx] = 2
+                actions_array[indx] = indx
 
 
         if v >= 2: print(f'[DEBUG] Player {player.__hash__()} actions: {actions_array}')
@@ -579,7 +579,7 @@ class ScoponeGame:
     def get_action(self, player: Player, action, v=0):
         
         for i, card in zip([self.map_card_index(card) for card in player.hand], player.hand):
-            if i == action:
+            if np.equal(i,action):
                 return card 
 
 
@@ -597,13 +597,17 @@ class ScoponeGame:
 
     def random_step(self, player: Player, action, v=-1):
         possible = self.get_player_actions(player, v=v)
-        chosen_index = np.argmax(possible)
-        for i in range(4):
-            rand = random.choice(possible)
-            if rand == 1 or rand == 2:
-                chosen_index = possible.index(rand)
-                break
-        
+
+        actitions = []
+
+        for i in possible:
+            if i != -1:
+                actitions.append(i)
+
+        chosen_index = random.choices(actitions, k=1)
+
+        if v==-1: print(f'[RANDOM] Player {player.__hash__()} plays {chosen_index} from {actitions} and {possible}')
+
         card = self.get_action(player, chosen_index, v=v)
     
         self.play_card(card, player, v=v)
