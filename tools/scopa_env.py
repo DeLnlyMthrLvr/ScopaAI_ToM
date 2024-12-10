@@ -62,12 +62,15 @@ class ScopaEnv(gym.Env):
             if not done:
                 if v == -7: print(f'[RL] Resetting game! {self.game.match_points[0]}|{self.game.match_points[1]}')
                 return self.reset(soft=True), reward + bonus, done, {}
+        if player.side == 1:
+            other = 1
+        else:
+            other = 0
 
-
-        if done and self.game.match_points[0]>self.game.match_points[0]:
-            return None, 5, done, {}
-        elif done and not self.game.match_points[0]>self.game.match_points[0]:
-            return None, -5, done, {}
+        if done and self.game.match_points[player.side-1]>self.game.match_points[other]:
+            return self.reset(), -100, done, {}
+        elif done and not self.game.match_points[player.side-1]>self.game.match_points[player.side-1]:
+            return self.reset(), 100, done, {}
         
         
         
@@ -92,9 +95,12 @@ class ScopaEnv(gym.Env):
         self.game.deal_initial_hands()
         self.player = self.game.players[self.player_number]
         self.state = self.game.get_player_state(self.game.players[0])
-        self.state = self.state.flatten()  # Flatten the state to a 1D array
+        self.state = self.state.flatten()
+        self.collection = np.zeros((len(self.game.players),len(self.state)))
+        for i, p in enumerate(self.game.players):
+            self.collection[i] = self.game.get_player_state(p).flatten()
 
-        return self.state
+        return self.collection
     
     def render(self):
         raise NotImplementedError
