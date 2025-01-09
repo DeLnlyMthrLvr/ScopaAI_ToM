@@ -9,6 +9,7 @@ class Agent:
     def __init__(self, actor_dims, critic_dims, n_actions, n_agents, agent_indx, checkpoint_dir, writer: SummaryWriter=None,
                 alpha=0.01, beta=0.01, fc1=64, 
                 fc2=64, gamma=0.95, tau=0.01, v=0):
+        T.autograd.set_detect_anomaly(True)
         self.gamma = gamma
         self.tau = tau
         self.n_actions = n_actions
@@ -33,7 +34,8 @@ class Agent:
 
 
     def choose_action(self, observation):
-        state = T.tensor([np.array(observation)], dtype=T.float).to(self.actor.device)
+        state = T.tensor(np.array(observation), dtype=T.double).to(self.actor.device)
+        print(f'state type: {state.dtype}')
         actions = self.actor.forward(state)
         return actions.detach().cpu().numpy()
 

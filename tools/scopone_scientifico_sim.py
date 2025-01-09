@@ -595,7 +595,7 @@ class ScoponeGame:
 
         return self.get_player_state(player, v=v), reward, False, {}
 
-    def random_step(self, player: Player, action, v=-1):
+    def __random_step(self, player: Player, action, v=-1):
         possible = self.get_player_actions(player, v=v)
 
         actitions = []

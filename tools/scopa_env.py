@@ -52,25 +52,36 @@ class ScopaEnv(gym.Env):
             if side1_score >= winning_threshold and side2_score < side1_score - 1:
                 if v >= 0: print(f'[MATCH] Side 1 wins with {side1_score} points!')
                 done = True
-                bonus = 5
+                bonus = [100, -100, 100, -100]
             elif side2_score >= winning_threshold and side1_score < side2_score - 1:
                 if v >= 0: print(f'[MATCH] Side 2 wins with {side2_score} points!')
                 done = True
-                bonus = -5
+                bonus = [-100, 100, -100, 100]
 
             if v == -7 and done: print(f'[RL] Game is over! {self.game.match_points[0]}|{self.game.match_points[1]}')
             if not done:
                 if v == -7: print(f'[RL] Resetting game! {self.game.match_points[0]}|{self.game.match_points[1]}')
-                return self.reset(soft=True), reward + bonus, done, {}
+                if side2_score < side1_score:
+                    bonus = [20, -20, 20, -20]
+                elif side1_score < side2_score:
+                    bonus = [-20, 20, -20, 20]
+                if side1_score == side2_score:
+                    bonus = [1, 1, 1, 1]
+
+                bonus.append(reward)
+                return self.reset(soft=True), bonus, done, {}
+            
         if player.side == 1:
             other = 1
         else:
             other = 0
 
         if done and self.game.match_points[player.side-1]>self.game.match_points[other]:
-            return self.reset(), -100, done, {}
+            bonus.append(reward)
+            return self.reset(), bonus, done, {}
         elif done and not self.game.match_points[player.side-1]>self.game.match_points[player.side-1]:
-            return self.reset(), 100, done, {}
+            bonus.append(reward)
+            return self.reset(), bonus, done, {}
         
         
         

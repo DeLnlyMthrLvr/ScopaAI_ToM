@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from maddpg.agent import Agent
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 # originally from https://github.com/philtabor/Multi-Agent-Deep-Deterministic-Policy-Gradients/blob/a3c294aa6834f348a7401306dff3e67919c861f5/maddpg.py
 
@@ -10,9 +11,11 @@ class MADDPG:
     def __init__(self, actor_dims, critic_dims, n_agents, n_actions, 
                  scenario='simple',  alpha=0.01, beta=0.01, fc1=64, 
                  fc2=64, gamma=0.99, tau=0.01, chkpt_dir='tmp/maddpg/'):
+        T.autograd.set_detect_anomaly(True)
         self.agents = []
         self.n_agents = n_agents
         self.n_actions = n_actions
+        self.tensorboardbufferactions = []
         chkpt_dir += scenario 
         for agent_idx in range(self.n_agents):
             self.agents.append(Agent(actor_dims[agent_idx], critic_dims,  
@@ -21,19 +24,21 @@ class MADDPG:
 
 
     def save_checkpoint(self):
-        print('... saving checkpoint ...')
+        #tqdm.write('... saving checkpoint ...')
         for agent in self.agents:
             agent.save_models()
 
     def load_checkpoint(self):
-        print('... loading checkpoint ...')
+        #tqdm.write('... loading checkpoint ...')
         for agent in self.agents:
             agent.load_models()
 
     def choose_action(self, raw_obs, players):
         actions = []
+        action_dist = []
         for agent_idx, agent in enumerate(self.agents):
             action = agent.choose_action(raw_obs[agent_idx])[0]
+            action_dist.append(action)
             p = players[agent_idx]
 
             map = [card.rank + 30 * (card.suit == 'bello') + 20 * (card.suit == 'fiori') + 10 * (card.suit == 'picche') - 1 for card in p.hand]
@@ -45,16 +50,24 @@ class MADDPG:
                     possibles.append(card)
                     possibles_i.append(i)
             actions.append(possibles_i[np.argmax(possibles)])
+        self.tensorboardbufferactions = action_dist
         return actions
+    
+    def latest_actions(self):
+        return self.tensorboardbufferactions
 
     def learn(self, memory):
         if not memory.ready():
             return
+        
+        tqdm.write('... learning ...', nolock=True)
 
         actor_states, states, actions, rewards, \
         actor_new_states, states_, dones = memory.sample_buffer()
 
         device = self.agents[0].actor.device
+
+        actions = np.array(actions[:])
 
         states = T.tensor(states, dtype=T.float).to(device)
         actions = T.tensor(actions, dtype=T.float).to(device)
@@ -82,6 +95,8 @@ class MADDPG:
         new_actions = T.cat([acts for acts in all_agents_new_actions], dim=1)
         mu = T.cat([acts for acts in all_agents_new_mu_actions], dim=1)
         old_actions = T.cat([acts for acts in old_agents_actions],dim=1)
+
+        print(f"Old_actions_datatype: {old_actions.dtype} and state_datatype: {states.dtype}")
 
         for agent_idx, agent in enumerate(self.agents):
             critic_value_ = agent.target_critic.forward(states_, new_actions).flatten()
