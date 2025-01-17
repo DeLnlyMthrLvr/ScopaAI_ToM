@@ -4,6 +4,8 @@ from gymnasium import spaces
 import numpy as np
 import random
 import itertools
+import tensorboard
+from tlogger import TLogger
 
 NUM_ITERS = 100  # Number of iterations before truncation
 PRINT_DEBUG = False
@@ -43,8 +45,9 @@ class Deck:
         return [self.cards.pop() for _ in range(num_cards)]
 
 class Player:
-    def __init__(self, side: int):
+    def __init__(self, side: int, name: str):
         self.side = side
+        self.name = name
         self.hand = []
         self.captures = []
         self.scopas = 0
@@ -55,23 +58,25 @@ class Player:
         self.captures = []
         self.scopas = 0
 
-    def capture(self, cards, _with):
+    def capture(self, cards, _with = None):
         self.captures.extend(cards)
-        if _with and _with in self.hand:
+        if _with is not None and _with in self.hand:
             self.hand.remove(_with)
 
     def play_card(self, card_index):
         return self.hand.pop(card_index)
 
 class ScopaGame:
-    def __init__(self):
+    def __init__(self, logger):
         self.deck = Deck()
-        self.players = [Player(1), Player(2), Player(1), Player(2)]
+        self.players = [Player(1, 'player_0'), Player(2, 'player_1'), Player(1, 'player_2'), Player(2, 'player_3')]
         self.table = []
         self.last_capture = None
+        self.tlogger = logger
 
     def reset(self):
         self.deck = Deck()
+        self.deck.shuffle()
         self.table = []
         for player in self.players:
             player.reset()
@@ -86,14 +91,23 @@ class ScopaGame:
         return False, []
 
     def play_card(self, card, player):
+        
         isin, comb = self.card_in_table(card)
-        if isin:
+        #ace mechanics
+        if card.rank == 1:
+            if PRINT_DEBUG: print(f"\t!!! Ace == {card} for player {[card.__str__() for card in player.hand]}")
+            self.table.append(card)
+            player.capture(self.table, _with=card)
+            self.table = []
+        elif isin:
             for c in comb:
                 self.table.remove(c)
             comb.append(card)
             player.capture(comb, _with=card)
-            if not self.table:
+            if len(self.table) == 0:
                 player.scopas += 1
+                self.tlogger.scopa(player)
+                if PRINT_DEBUG: print(f"\t!!! Scopa for player {player.side}")
         else:
             player.hand.remove(card)
             self.table.append(card)
@@ -156,22 +170,36 @@ class ScopaGame:
         else:
             return 0, 0
 
+def env(tlogger, render_mode=None):
+    internal_render_mode = render_mode if render_mode != "ansi" else "human"
+    env = MaScopaEnv(render_mode=internal_render_mode, tlogger=tlogger)
+    # This wrapper is only for environments which print results to the terminal
+    if render_mode == "ansi":
+        env = wrappers.CaptureStdoutWrapper(env)
+    return env
+
 class MaScopaEnv(AECEnv):
     metadata = {
         "render_modes": ["human"],
         "name": "scopa_v0",
+        "is_parallelizable": True,
     }
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, tlogger=None):
         super().__init__()
         self.render_mode = render_mode
 
-        self.game = ScopaGame()
-        self.possible_agents = [f"player_{i}" for i in range(4)]
-        self.agent_name_mapping = {agent: i for i, agent in enumerate(self.possible_agents)}
+        self.tlogger = tlogger
+        self.commulative_sides = [0, 0]
+        self.archive_scores = []
+
+        self.game = ScopaGame(logger=self.tlogger)
+        self.possible_agents = [player.name for player in self.game.players]
+        self.agent_name_mapping = {agent: int(agent[-1]) for  agent in self.possible_agents}
 
         self._action_spaces = {
-            agent: spaces.Box(0, 1, shape=(1,40)) for agent in self.possible_agents
+            #agent: spaces.Box(0, 1, shape=(1,40)) for agent in self.possible_agents
+            agent: spaces.Discrete(40) for agent in self.possible_agents
         }
         self._observation_spaces = {
             agent: spaces.Box(0, 1, shape=(3, 40), dtype=np.float32) for agent in self.possible_agents
@@ -192,35 +220,38 @@ class MaScopaEnv(AECEnv):
 
         for card in player.hand:
             index = (card.rank - 1) + {
-                'picche': 0,
-                'bello': 10,
+                'cuori': 0,
+                'picche': 10,
                 'fiori': 20,
-                'cuori': 30
+                'bello': 30
             }[card.suit]
             state[0][index] = 1
 
         for card in self.game.table:
             index = (card.rank - 1) + {
-                'picche': 0,
-                'bello': 10,
+                'cuori': 0,
+                'picche': 10,
                 'fiori': 20,
-                'cuori': 30
+                'bello': 30
             }[card.suit]
             state[1][index] = 1
 
         for card in player.captures:
             index = (card.rank - 1) + {
-                'picche': 0,
-                'bello': 10,
+                'cuori': 0,
+                'picche': 10,
                 'fiori': 20,
-                'cuori': 30
+                'bello': 30
             }[card.suit]
             state[2][index] = 1
 
         return state
 
-    def reset(self):
+    def reset(self, seed='42', options='43'):
+        #if seed != '42' or options != '43':
+            #print(f'### WARNING: seed and options are not used in this environment. Expected [42|43]. Recieved: [{seed}|{options}]')
         self.game.reset()
+
 
         self.num_moves = 0
 
@@ -234,25 +265,51 @@ class MaScopaEnv(AECEnv):
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
-        self.infos = {agent: {"action_mask": self._get_action_mask(agent)} for agent in self.agents}
+        self.infos = {agent: {"action_mask": self.get_action_mask(agent)} for agent in self.agents}
         self.observations = {agent: self.observe(agent) for agent in self.agents}
         
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
 
-    def _get_action_mask(self, agent):
-        player_index = self.agent_name_mapping[agent]
-        player = self.game.players[player_index]
-        action_mask = np.zeros(40, dtype=int)
 
-        for card in player.hand:
-            index = (card.rank - 1) + {
-                'picche': 0,
-                'bello': 10,
-                'fiori': 20,
-                'cuori': 30
-            }[card.suit]
-            action_mask[index] = 1
+    def get_action_mask(self, agent = 'current'):
+
+        if agent == 'current':
+            action_mask = np.zeros(40, dtype=int)
+            for card in self.game.players[self.agent_name_mapping[self.agent_selection]].hand:
+                index = (card.rank - 1) + {
+                    'cuori': 0,
+                    'picche': 10,
+                    'fiori': 20,
+                    'bello': 30
+                }[card.suit]
+                action_mask[index] = 1
+            
+        elif agent is None:
+            action_mask = np.zeros(160, dtype=int)
+
+            for t, player in enumerate(self.game.players):
+                for card in player.hand:
+                    index = (t * 40) + (card.rank - 1) + {
+                        'cuori': 0,
+                        'picche': 10,
+                        'fiori': 20,
+                        'bello': 30
+                    }[card.suit]
+                    action_mask[index] = 1
+        else:
+            action_mask = np.zeros(40, dtype=int)
+            player_index = self.agent_name_mapping[agent]
+            player = self.game.players[player_index]
+
+            for card in player.hand:
+                index = (card.rank - 1) + {
+                    'cuori': 0,
+                    'picche': 10,
+                    'fiori': 20,
+                    'bello': 30
+                }[card.suit]
+                action_mask[index] = 1
 
         return action_mask
 
@@ -264,44 +321,82 @@ class MaScopaEnv(AECEnv):
             self._was_dead_step(action)
             return
 
+        fine = False
+        # if len(action.flatten()) != 1: 
+        #     print(f"### WARNING: too many actions provided: [{action}]")
+        #     action = np.argmax(action.flatten())
+        #     fine = True
+
         agent = self.agent_selection
         player_index = self.agent_name_mapping[agent]
         player = self.game.players[player_index]
 
         card = None
 
+        backup = 0
+
         for c in player.hand:
             ind = (c.rank - 1) + {
-                'picche': 0,
-                'bello': 10,
+                'cuori': 0,
+                'picche': 10,
                 'fiori': 20,
-                'cuori': 30
+                'bello': 30
             }[c.suit]
 
             if ind == action:
                 card = c
                 break
+            else:
+                backup = c
+
+        # If action is invalid and was not randomly drawn, raise an error
+        if card == None and not fine:
+            raise ValueError(f"### ERROR: Invalid action: {action}!!")
+
+        # If action is invalid and was randomly drawn, go with the backup
+        elif card == None:
+            if PRINT_DEBUG: print(f"### ERROR: Invalid action: {action} going with backup: {backup}")
+            card = backup
+
+        if PRINT_DEBUG: 
+            print(f"\n### Agent {agent} plays card: {card}")
+            print(f"### Table state before play: {[card.__str__() for card in self.game.table]}")
 
         self.game.play_card(card, player)
+
+        if PRINT_DEBUG: 
+            print(f"### Table state after play: {[card.__str__() for card in self.game.table]}")
 
         # Check if all players have played their cards
         if all(len(player.hand) == 0 for player in self.game.players):
             # Evaluate the round and assign rewards
             round_scores = self.game.evaluate_round()
-            if PRINT_DEBUG: print('round scores:', round_scores)
+            self.archive_scores.append(round_scores)
+            self.commulative_sides[0] += round_scores[0]
+            self.commulative_sides[1] += round_scores[1]
+            self.tlogger.writer.add_scalar("Scores/Side/0", self.commulative_sides[0], self.tlogger.simulation_clock)   
+            self.tlogger.writer.add_scalar("Scores/Side/1", self.commulative_sides[1], self.tlogger.simulation_clock)
+            if PRINT_DEBUG: print(f"### Round scores: {round_scores}")
             for i, agent in enumerate(self.possible_agents):
                 self.rewards[agent] = round_scores[self.agent_name_mapping[agent] % 2]
-            if PRINT_DEBUG: print('rewards after termination?', self.rewards)
+            if PRINT_DEBUG: print(f"### Rewards after termination: {self.rewards}")
             self.terminations = {agent: True for agent in self.agents}  # End the game
 
+        if PRINT_DEBUG: print(f"### Observations updated for agent {agent}")
         self.observations[agent] = self.observe(agent)
-        self.infos[agent]["action_mask"] = self._get_action_mask(agent)
+        self.infos[agent]["action_mask"] = self.get_action_mask(agent)
         self.num_moves += 1
 
         if self.num_moves >= NUM_ITERS:
             self.truncations = {a: True for a in self.agents}
 
+        if PRINT_DEBUG: print(f"### Agent selection moved to next agent")
         self.agent_selection = self._agent_selector.next()
+
+        self.tlogger.record_step()
+
+    def roundScores(self):
+        return self.archive_scores
 
     def render(self):
         if self.render_mode == "human":
