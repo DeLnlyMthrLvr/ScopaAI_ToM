@@ -14,7 +14,7 @@ from tlogger import TLogger
 import os
 import glob
 
-SIDE = 0
+SIDE = 1
 
 class SB3ActionMaskWrapper(BaseWrapper):
     """Wrapper to allow PettingZoo environments to be used with SB3 illegal action masking."""
@@ -62,7 +62,7 @@ def mask_fn(env):
 
 
 def train_action_mask(env_fn, writer_log, steps=10_000, seed=42, **env_kwargs):
-    """Train a single model to play as each agent in a zero-sum game environment using invalid action masking."""
+    """Train a single model to play as each agent in a Scopone Scientifico game environment using invalid action masking."""
     env = env_fn
 
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -153,20 +153,23 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
                 break
             else:
                 
-                if i <= 2: print(f'{ agent in sidet} | {agent}')
                 if agent not in sidet:
                     act = env.action_space(agent).sample(action_mask.astype(np.int8))
                 else:
                     # Note: PettingZoo expects integer actions # TODO: readapt!!!! and check the results of what is going on
-                    act = int(
-                        model.predict(
-                            observation, action_masks=action_mask, deterministic=True
+                    act = int(model.predict(
+                            observation, action_masks=action_mask
                         )[0]
                     )
+
             env.step(act)
             tlogger.add_tick()
     scoresp = env.roundScores()
     env.close()
+
+
+
+    plt.show()
 
 
     # Avoid dividing by zero
@@ -184,7 +187,7 @@ if __name__ == '__main__':
 
     
 
-    experiment_name = f"ytesting_s{SIDE}_100k_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
+    experiment_name = f"NNRytesting_s{SIDE}_100k_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
 
     #experiment_name = f"Training_3M_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
 
@@ -196,7 +199,7 @@ if __name__ == '__main__':
 
     #train_action_mask(env_fn=env, writer_log=tlogger.get_log_dir(), steps=3_000_000, seed=42)
 
-    eval_action_mask(env, num_games=100_000)
+    eval_action_mask(env, num_games=10_000)
 
     plt.bar([f'player_{i}' for i in range(4)], tlogger.scopas_log)
 
