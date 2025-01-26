@@ -81,7 +81,7 @@ def train_action_mask(env_fn, writer_log, steps=10_000, seed=42, **env_kwargs):
     model.set_random_seed(seed)
     model.learn(total_timesteps=steps)
 
-    model.save(f"{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}")
+    model.save(f"{env.unwrapped.metadata.get('name')}_ToM1_{time.strftime('%Y%m%d-%H%M%S')}")
 
     print("Model has been saved.")
 
@@ -105,15 +105,18 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
     )
 
     try:
+        policies = glob.glob(f"{env.metadata['name']}*.zip")
         latest_policy = max(
-            glob.glob(f"{env.metadata['name']}*.zip"), key=os.path.getctime
+            policies, key=os.path.getctime
         )
-        print(f"Loading policy: {latest_policy}")
+        tomZero = policies[1]
+        print(f"Loading policy: {latest_policy} amd {tomZero}")
     except ValueError:
         print("Policy not found.")
         exit(0)
 
-    model = MaskablePPO.load(latest_policy)
+    model = MaskablePPO.load(tomZero)
+    model_TOM = MaskablePPO.load(latest_policy)
 
     
 
@@ -154,11 +157,15 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
             else:
                 
                 if agent not in sidet:
-                    act = env.action_space(agent).sample(action_mask.astype(np.int8))
+                    #act = env.action_space(agent).sample(action_mask.astype(np.int8))
+                    act = int(model_TOM.predict(
+                            observation, action_masks=action_mask
+                        )[0]
+                    )
                 else:
                     # Note: PettingZoo expects integer actions # TODO: readapt!!!! and check the results of what is going on
                     act = int(model.predict(
-                            observation, action_masks=action_mask
+                            observation[:3], action_masks=action_mask
                         )[0]
                     )
 
@@ -187,9 +194,9 @@ if __name__ == '__main__':
 
     
 
-    experiment_name = f"NNRytesting_s{SIDE}_100k_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
+    experiment_name = f"[0VS1]testing_ToM_s{SIDE}_10k_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
 
-    #experiment_name = f"Training_3M_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
+    #experiment_name = f"Training_ToM_3M_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
 
     tlogger = TLogger(f"runs/{experiment_name}")
 

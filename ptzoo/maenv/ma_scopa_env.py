@@ -50,12 +50,14 @@ class Player:
         self.name = name
         self.hand = []
         self.captures = []
+        self.history = []
         self.scopas = 0
 
     def reset(self):
         
         self.hand = []
         self.captures = []
+        self.history = []
         self.scopas = 0
 
     def capture(self, cards, _with = None):
@@ -91,6 +93,7 @@ class ScopaGame:
         return False, []
 
     def play_card(self, card, player):
+        player.history.append(card)
         
         isin, comb = self.card_in_table(card)
         #ace mechanics
@@ -202,7 +205,7 @@ class MaScopaEnv(AECEnv):
             agent: spaces.Discrete(40) for agent in self.possible_agents
         }
         self._observation_spaces = {
-            agent: spaces.Box(0, 1, shape=(3, 40), dtype=np.float32) for agent in self.possible_agents
+            agent: spaces.Box(0, 1, shape=(6, 40), dtype=np.float32) for agent in self.possible_agents
         }
 
         self.reset()
@@ -215,8 +218,21 @@ class MaScopaEnv(AECEnv):
 
     def observe(self, agent):
         player_index = self.agent_name_mapping[agent]
+        if player_index == 0:
+            friend = self.game.players[2]
+            enemies = [self.game.players[1], self.game.players[3]]
+        elif player_index == 1:
+            friend = self.game.players[3]
+            enemies = [self.game.players[0], self.game.players[2]]
+        elif player_index == 2:
+            friend = self.game.players[0]
+            enemies = [self.game.players[1], self.game.players[3]]
+        elif player_index == 3:
+            friend = self.game.players[1]
+            enemies = [self.game.players[0], self.game.players[2]]
+
         player = self.game.players[player_index]
-        state = np.zeros((3, 40))
+        state = np.zeros((6, 40))
 
         for card in player.hand:
             index = (card.rank - 1) + {
@@ -244,6 +260,29 @@ class MaScopaEnv(AECEnv):
                 'bello': 30
             }[card.suit]
             state[2][index] = 1
+        
+        for card in friend.captures:
+            index = (card.rank - 1) + {
+                'cuori': 0,
+                'picche': 10,
+                'fiori': 20,
+                'bello': 30
+            }[card.suit]
+            state[2][index] = 1
+
+        enemies.append(friend)
+
+        others = enemies
+
+        for i, enemy in enumerate(others):
+            for card in enemy.history:
+                index = (card.rank - 1) + {
+                    'cuori': 0,
+                    'picche': 10,
+                    'fiori': 20,
+                    'bello': 30
+                }[card.suit]
+                state[3 + i][index] = 1
 
         return state
 
