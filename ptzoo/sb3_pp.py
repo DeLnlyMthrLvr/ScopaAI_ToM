@@ -60,8 +60,7 @@ def sanity_check(mask):
 def mask_fn(env):
     return env.get_action_mask()
 
-
-def train_action_mask(env_fn, writer_log, steps=10_000, seed=42, **env_kwargs):
+def train_action_mask(env_fn, writer_log, steps=10_000, seed=41, **env_kwargs):
     """Train a single model to play as each agent in a Scopone Scientifico game environment using invalid action masking."""
     env = env_fn
 
@@ -81,7 +80,7 @@ def train_action_mask(env_fn, writer_log, steps=10_000, seed=42, **env_kwargs):
     model.set_random_seed(seed)
     model.learn(total_timesteps=steps)
 
-    model.save(f"{env.unwrapped.metadata.get('name')}_ToM1_{time.strftime('%Y%m%d-%H%M%S')}")
+    model.save(f"{env.unwrapped.metadata.get('name')}_ToM1_NoSharedCaptures_{time.strftime('%Y%m%d-%H%M%S')}")
 
     print("Model has been saved.")
 
@@ -97,11 +96,11 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
         sidet = ['player_0', 'player_2']
         nsidet = ['player_1', 'player_3']
     else:
-        sidet = ['player_1', 'player_3']
-        nsidet = ['player_0', 'player_2']
+        sidet = ['player_1', 'player_0']
+        nsidet = ['player_3', 'player_2']
 
     print(
-        f"Starting evaluation vs a random agent.\n\t!Random! agent will play as side: {side} with players: {sidet}\n\t!Trained! agent will be players: {nsidet}"
+        f"Starting evaluation vs a random agent.\n\t!Old RW! agent will play as side: {side} with players: {sidet}\n\t!New RW! agent will be players: {nsidet}"
     )
 
     try:
@@ -109,7 +108,11 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
         latest_policy = max(
             policies, key=os.path.getctime
         )
-        tomZero = policies[1]
+
+        ##LOAD DIFFERENT POLICIES
+        tomZero = policies[2]
+        latest_policy = policies[1]
+
         print(f"Loading policy: {latest_policy} amd {tomZero}")
     except ValueError:
         print("Policy not found.")
@@ -118,7 +121,6 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
     model = MaskablePPO.load(tomZero)
     model_TOM = MaskablePPO.load(latest_policy)
 
-    
 
     scores = {agent: 0 for agent in env.possible_agents}
     total_rewards = {agent: 0 for agent in env.possible_agents}
@@ -159,16 +161,18 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
                 if agent not in sidet:
                     #act = env.action_space(agent).sample(action_mask.astype(np.int8))
                     act = int(model_TOM.predict(
-                            observation, action_masks=action_mask
+                            observation[:3], action_masks=action_mask, deterministic=True
                         )[0]
                     )
                 else:
                     # Note: PettingZoo expects integer actions # TODO: readapt!!!! and check the results of what is going on
                     act = int(model.predict(
-                            observation[:3], action_masks=action_mask
+                            #observation[:3], action_masks=action_mask <-- this is for not TOM models (observation space size is 3x40)
+                            observation, action_masks=action_mask, deterministic=True
                         )[0]
                     )
 
+            
             env.step(act)
             tlogger.add_tick()
     scoresp = env.roundScores()
@@ -189,14 +193,14 @@ def eval_action_mask(env_fn, num_games=10000, render_mode=None, side= SIDE):
     print("Final scores: ", scores)
     return total_rewards, winrate, scores
 
+    
 
 if __name__ == '__main__':
 
-    
 
-    experiment_name = f"[0VS1]testing_ToM_s{SIDE}_10k_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
+    experiment_name = f"Mixed_testing_ToM_s{SIDE}_30k_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
 
-    #experiment_name = f"Training_ToM_3M_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
+    #experiment_name = f"Training_ToM_2M_SharedCapturesWdiffRew_mappo_scopa_{time.strftime('%m%d-%H%M%S')}"
 
     tlogger = TLogger(f"runs/{experiment_name}")
 
@@ -204,9 +208,9 @@ if __name__ == '__main__':
     #env = aec_to_parallel(env)
     env.reset()
 
-    #train_action_mask(env_fn=env, writer_log=tlogger.get_log_dir(), steps=3_000_000, seed=42)
+    #train_action_mask(env_fn=env, writer_log=tlogger.get_log_dir(), steps=2_000_000, seed=41)
 
-    eval_action_mask(env, num_games=10_000)
+    eval_action_mask(env, num_games=30_000)
 
     plt.bar([f'player_{i}' for i in range(4)], tlogger.scopas_log)
 

@@ -4,7 +4,6 @@ from gymnasium import spaces
 import numpy as np
 import random
 import itertools
-import tensorboard
 from tlogger import TLogger
 
 NUM_ITERS = 100  # Number of iterations before truncation
@@ -38,7 +37,8 @@ class Deck:
         self.cards = [Card(rank, suit) for suit in self.suits for rank in self.ranks]
         self.shuffle()
 
-    def shuffle(self):
+    def shuffle(self, seed = 42):
+        random.seed(seed)
         random.shuffle(self.cards)
 
     def deal(self, num_cards: int):
@@ -76,9 +76,9 @@ class ScopaGame:
         self.last_capture = None
         self.tlogger = logger
 
-    def reset(self):
+    def reset(self, seed = 42):
         self.deck = Deck()
-        self.deck.shuffle()
+        self.deck.shuffle(seed=seed)
         self.table = []
         for player in self.players:
             player.reset()
@@ -166,8 +166,16 @@ class ScopaGame:
             team2_points += 1
 
         # Return final round scores
+        # if team1_points > team2_points:
+        #     return (team1_points - team2_points) , (team2_points - team1_points)
+        # elif team2_points > team1_points:
+        #     return (team2_points - team1_points), (team1_points - team2_points)
+        # else:
+        #     return 0, 0
+
+        # 1 or -1 reward type
         if team1_points > team2_points:
-            return 1, -1
+            return 1 , -1
         elif team2_points > team1_points:
             return -1, 1
         else:
@@ -288,14 +296,12 @@ class MaScopaEnv(AECEnv):
 
     def reset(self, seed='42', options='43'):
         #if seed != '42' or options != '43':
+
             #print(f'### WARNING: seed and options are not used in this environment. Expected [42|43]. Recieved: [{seed}|{options}]')
-        self.game.reset()
-
-
+        self.game.reset(seed=seed)
         self.num_moves = 0
-
-
         # Randomize the starting player SUPER IMPORTANT otherwise the not-starting side would have an advantage
+        random.seed(seed)
         randstart = random.randint(0, 3)
         self.possible_agents = self.possible_agents[randstart:] + self.possible_agents[:randstart]
         self.agents = self.possible_agents[:]
@@ -360,11 +366,6 @@ class MaScopaEnv(AECEnv):
             self._was_dead_step(action)
             return
 
-        fine = False
-        # if len(action.flatten()) != 1: 
-        #     print(f"### WARNING: too many actions provided: [{action}]")
-        #     action = np.argmax(action.flatten())
-        #     fine = True
 
         agent = self.agent_selection
         player_index = self.agent_name_mapping[agent]
@@ -372,7 +373,7 @@ class MaScopaEnv(AECEnv):
 
         card = None
 
-        backup = 0
+        
 
         for c in player.hand:
             ind = (c.rank - 1) + {
@@ -384,18 +385,7 @@ class MaScopaEnv(AECEnv):
 
             if ind == action:
                 card = c
-                break
-            else:
-                backup = c
 
-        # If action is invalid and was not randomly drawn, raise an error
-        if card == None and not fine:
-            raise ValueError(f"### ERROR: Invalid action: {action}!!")
-
-        # If action is invalid and was randomly drawn, go with the backup
-        elif card == None:
-            if PRINT_DEBUG: print(f"### ERROR: Invalid action: {action} going with backup: {backup}")
-            card = backup
 
         if PRINT_DEBUG: 
             print(f"\n### Agent {agent} plays card: {card}")
